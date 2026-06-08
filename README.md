@@ -88,7 +88,7 @@ oppendiskanalysis/
 
 ## 📝 说明
 
-本项目为 TreeSize 的开源 Web 实现参考版本，适合学习与二次开发。
+本项目为开源 Web 实现参考版本，适合学习与二次开发。
 
 ## 📄 License
 
