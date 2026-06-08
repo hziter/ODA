@@ -1,8 +1,8 @@
 # OppenDiskAnalysis (ODA)
 
-> 📊 TreeSize 风格的开源磁盘空间分析软件
+> 📊 开源磁盘空间分析软件
 
-一个基于 Web 的磁盘空间可视化与分析工具，完全模仿 TreeSize Professional 的界面与功能。
+一个基于 Web 的磁盘空间可视化与分析工具。
 
 ## ✨ 功能特性
 
@@ -92,4 +92,4 @@ oppendiskanalysis/
 
 ## 📄 License
 
-MIT License
+AGPL-3.0 license
