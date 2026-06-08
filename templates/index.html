@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OppenDiskAnalysis (ODA) - 磁盘空间分析软件</title>
+<link rel="stylesheet" href="/static/css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+</head>
+<body>
+
+<!-- ================= 顶部工具栏 ================= -->
+<div id="toolbar">
+  <div class="toolbar-left">
+    <div class="logo" title="点击刷新">
+      <span class="logo-icon">📊</span>
+      <span class="logo-text">ODA</span>
+      <span class="logo-sub">OppenDiskAnalysis</span>
+    </div>
+    <div class="sep-v"></div>
+
+    <!-- 驱动器选择 -->
+    <div class="control-group">
+      <label class="control-label">📀 驱动器</label>
+      <select id="driveSelect" class="toolbar-select">
+        <option>加载中...</option>
+      </select>
+    </div>
+
+    <!-- 浏览路径 -->
+    <div class="control-group">
+      <input type="text" id="pathInput" class="path-input" placeholder="或输入路径 (例如: D:\Downloads)" />
+      <button id="btnScan" class="btn btn-primary">▶ 扫描</button>
+      <button id="btnRefresh" class="btn" title="重新加载当前路径">⟳ 刷新</button>
+    </div>
+
+    <div class="sep-v"></div>
+
+    <!-- 视图切换 -->
+    <div class="view-switch">
+      <button class="btn" data-view="details">📋 详情</button>
+      <button class="btn active-view" data-view="treemap">▣ 树状图</button>
+      <button class="btn" data-view="pie">◔ 文件类型</button>
+      <button class="btn" data-view="bar">▦ 大文件夹</button>
+      <button class="btn" data-view="topfiles">📄 大文件</button>
+      <button class="btn" data-view="duplicates">♊ 重复</button>
+      <button class="btn" data-view="old">📅 老旧</button>
+    </div>
+  </div>
+
+  <div class="toolbar-right">
+    <!-- 搜索过滤 -->
+    <div class="filter-group">
+      <input type="text" id="filterInput" class="filter-input" placeholder="🔍 搜索文件名...">
+      <input type="text" id="extFilter" class="filter-input" placeholder="扩展名 (如: exe, pdf)">
+    </div>
+
+    <div class="sep-v"></div>
+
+    <!-- 导出菜单 -->
+    <div class="export-container">
+      <button id="btnExport" class="btn">📤 导出 ▾</button>
+      <div class="dropdown-menu" id="exportMenu">
+        <div class="export-option" data-format="csv">导出为 CSV 表格</div>
+        <div class="export-option" data-format="html">导出为 HTML 报告</div>
+      </div>
+    </div>
+
+    <!-- 关于 -->
+    <button id="btnAbout" class="btn" title="关于 OppenDiskAnalysis">ⓘ</button>
+    <!-- 服务器信息 -->
+    <button id="btnServer" class="btn" title="服务器信息 & 远程访问">🌐</button>
+  </div>
+</div>
+
+<!-- ================= 进度条 ================= -->
+<div id="progressBar" class="progress-bar-container" style="display:none">
+  <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+  <span id="progressText" class="progress-text">扫描中...</span>
+</div>
+
+<!-- ================= 主内容区: 三栏布局 ================= -->
+<div id="mainContent">
+
+  <!-- 左栏: 目录树 + 摘要 -->
+  <div id="leftPanel" class="panel">
+    <div class="panel-section">
+      <div class="panel-header">
+        <span class="panel-title">💾 驱动器摘要</span>
+      </div>
+      <div id="driveSummary" class="drive-summary">
+        <div class="empty-small">加载中...</div>
+      </div>
+    </div>
+
+    <div class="panel-section flex-1">
+      <div class="panel-header">
+        <span class="panel-title">🌲 目录树</span>
+        <span id="treeBadge" class="badge"></span>
+      </div>
+      <div id="treeView" class="tree-view">
+        <div class="empty-state"><div class="empty-icon">📂</div>
+          <p>选择驱动器后点击"扫描"</p>
+          <p class="hint">目录将按大小降序显示</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 中栏: 详细列表 -->
+  <div id="centerPanel" class="panel flex-1">
+    <div class="panel-section">
+      <div class="panel-header">
+        <span class="panel-title" id="listTitle">📂 文件列表</span>
+        <div class="panel-right">
+          <span id="breadcrumb" class="breadcrumb"></span>
+          <span id="listSummary" class="badge"></span>
+        </div>
+      </div>
+      <div id="listHeader" class="list-header">
+        <div class="col col-icon sortable" data-sort="type" title="类型">📁</div>
+        <div class="col col-name sortable" data-sort="name">名称 <span class="sort-caret"></span></div>
+        <div class="col col-size sortable sorted-desc" data-sort="size">大小 <span class="sort-caret"></span></div>
+        <div class="col col-pct sortable" data-sort="percent">百分比 <span class="sort-caret"></span></div>
+        <div class="col col-allocated sortable" data-sort="allocated">占用 <span class="sort-caret"></span></div>
+        <div class="col col-files sortable" data-sort="files">文件数 <span class="sort-caret"></span></div>
+        <div class="col col-folders sortable" data-sort="folders">子目录 <span class="sort-caret"></span></div>
+        <div class="col col-modified sortable" data-sort="modified">修改时间 <span class="sort-caret"></span></div>
+      </div>
+      <div id="listBody" class="list-body">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <p>选择路径后点击"扫描"开始分析</p>
+          <p class="hint">将按大小降序显示所有项目</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右栏: 图表可视化 -->
+  <div id="rightPanel" class="panel">
+    <div class="panel-section flex-1">
+      <div class="panel-header">
+        <span class="panel-title" id="chartTitle">▣ 树状图</span>
+        <div class="panel-right">
+          <span id="chartPath" class="path-ellipsis"></span>
+        </div>
+      </div>
+      <div id="chartContainer" class="chart-container"></div>
+      <div class="panel-footer" id="chartLegend">
+        方块大小 = 文件/目录大小 · 颜色 = 类型/层级
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ================= 右键菜单 ================= -->
+<div id="contextMenu" class="context-menu" style="display:none">
+  <div class="cm-item" data-action="open">📂 在资源管理器中打开</div>
+  <div class="cm-item" data-action="copy-path">📋 复制路径</div>
+  <div class="cm-item" data-action="copy-size">📐 复制大小</div>
+  <div class="cm-separator"></div>
+  <div class="cm-item" data-action="scan">🔍 扫描此目录</div>
+  <div class="cm-item" data-action="set-root">🎯 设为根目录</div>
+</div>
+
+<!-- ================= 状态栏 ================= -->
+<div id="statusBar">
+  <div class="status-left">
+    <span id="statusIcon">●</span>
+    <span id="statusText">就绪 - 选择一个驱动器或输入路径</span>
+  </div>
+  <div class="status-center" id="statusCenter"></div>
+  <div class="status-right">
+    <span>OppenDiskAnalysis v2.0</span>
+    <span class="sep-dot">·</span>
+    <span id="clock">--:--:--</span>
+  </div>
+</div>
+
+<!-- ================= 关于对话框 ================= -->
+<div id="aboutModal" class="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title">关于 OppenDiskAnalysis</span>
+      <span class="modal-close" id="aboutClose">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="about-logo">📊</div>
+      <div class="about-title">OppenDiskAnalysis (ODA)</div>
+      <div class="about-version">版本 2.0.0 · 开源磁盘空间分析工具</div>
+      <div class="about-grid">
+        <div class="about-feature">
+          <div class="af-icon">📁</div>
+          <div class="af-title">目录树浏览</div>
+          <div class="af-desc">按大小排序显示所有目录，可展开/折叠</div>
+        </div>
+        <div class="about-feature">
+          <div class="af-icon">▣</div>
+          <div class="af-title">树状图</div>
+          <div class="af-desc">直观的矩形树状图，方块大小对应文件占用</div>
+        </div>
+        <div class="about-feature">
+          <div class="af-icon">◔</div>
+          <div class="af-title">文件类型统计</div>
+          <div class="af-desc">按扩展名饼图统计各类文件的空间占比</div>
+        </div>
+        <div class="about-feature">
+          <div class="af-icon">♊</div>
+          <div class="af-title">重复文件检测</div>
+          <div class="af-desc">基于大小+哈希快速识别重复文件</div>
+        </div>
+        <div class="about-feature">
+          <div class="af-icon">📤</div>
+          <div class="af-title">导出报告</div>
+          <div class="af-desc">支持 CSV 表格 / HTML 报告格式</div>
+        </div>
+        <div class="about-feature">
+          <div class="af-icon">🔍</div>
+          <div class="af-title">搜索过滤</div>
+          <div class="af-desc">按名称、扩展名、大小等多维度过滤</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="aboutOk" class="btn btn-primary">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 服务器信息对话框 ================= -->
+<div id="serverModal" class="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title">🌐 服务器信息 & 远程访问</span>
+      <span class="modal-close" id="serverClose">&times;</span>
+    </div>
+    <div class="modal-body" id="serverBody">
+      <div class="about-logo">🖥️</div>
+      <div class="about-title" id="serverHostname">加载中...</div>
+      <div class="about-version" id="serverPlatform">正在获取服务器信息...</div>
+
+      <div style="margin-top: 20px; padding: 14px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
+        <div style="font-weight: 600; margin-bottom: 8px; color: #2e7d32;">✅ 本机访问地址</div>
+        <code id="localUrl" style="background: #fff; padding: 4px 10px; border-radius: 4px; font-size: 13px;">加载中...</code>
+      </div>
+
+      <div style="margin-top: 12px; padding: 14px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #1976d2;">
+        <div style="font-weight: 600; margin-bottom: 8px; color: #0d47a1;">🌐 局域网访问地址（其他设备访问）</div>
+        <div id="lanUrls" style="font-size: 13px;">加载中...</div>
+        <div style="font-size: 11px; color: #546e7a; margin-top: 8px;">
+          💡 在同一局域网的手机/电脑浏览器输入上述地址即可访问
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; padding: 14px; background: #fff3e0; border-radius: 6px; border-left: 4px solid #ff9800;">
+        <div style="font-weight: 600; margin-bottom: 8px; color: #e65100;">⚠ 重要说明：扫描范围</div>
+        <div style="font-size: 13px; color: #5d4037; line-height: 1.6;">
+          <strong>ODA 扫描的是运行这个软件的那台电脑的磁盘</strong>，不是你的手机/浏览器所在的设备。<br>
+          例如：如果你在 <strong>电脑 A</strong> 上启动了 ODA，然后用 <strong>手机 B</strong> 的浏览器访问，<br>
+          手机 B 上看到的是 <strong>电脑 A</strong> 的磁盘使用情况。
+        </div>
+        <div style="font-size: 13px; color: #5d4037; line-height: 1.6; margin-top: 10px;">
+          <strong>📌 想分析其他设备的磁盘？</strong><br>
+          方案1：<strong>在该设备上运行 ODA</strong>（推荐，直接扫描本机）<br>
+          方案2：<strong>映射网络共享目录</strong>后在输入框填 UNC 路径，如：
+          <code style="background: #fff; padding: 2px 6px; border-radius: 3px;">\\192.168.1.100\共享文件夹</code>
+        </div>
+      </div>
+
+      <div style="margin-top: 12px; padding: 14px; background: #ffebee; border-radius: 6px; border-left: 4px solid #e53935;">
+        <div style="font-weight: 600; margin-bottom: 8px; color: #b71c1c;">🔒 安全提醒</div>
+        <div style="font-size: 13px; color: #5d4037; line-height: 1.6;">
+          外部可访问意味着同局域网的任何人都可以查看你的磁盘信息。<br>
+          在公共网络中请谨慎使用，建议仅在可信的局域网中运行。
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="serverOk" class="btn btn-primary">知道了</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
